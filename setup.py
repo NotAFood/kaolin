@@ -69,6 +69,19 @@ def get_cuda_bare_metal_version(cuda_dir):
     release = output[release_idx].split(".")
     return raw_output, release[0], release[1][0]
 
+def _nvcc_major_matches_torch():
+    """Return True if nvcc major version matches torch's CUDA major version."""
+    if CUDA_HOME is None:
+        return False
+    try:
+        _, nvcc_major, _ = get_cuda_bare_metal_version(CUDA_HOME)
+        torch_cuda = torch.version.cuda  # e.g. "12.8"
+        if torch_cuda is None:
+            return False
+        return int(nvcc_major) == int(torch_cuda.split(".")[0])
+    except Exception:
+        return False
+
 # Handle CUDA availability
 if not torch.cuda.is_available() and os.getenv('FORCE_CUDA', '0') == '1':
     logging.warning(
@@ -153,8 +166,17 @@ def get_extensions():
     define_macros = []
     include_dirs = []
     sources = glob.glob('kaolin/csrc/**/*.cpp', recursive=True)
-    # FORCE_CUDA is for cross-compilation in docker build
-    is_cuda = torch.cuda.is_available() or os.getenv('FORCE_CUDA', '0') == '1'
+    # FORCE_CUDA is for cross-compilation in docker build.
+    # Also require nvcc major version to match torch's CUDA major version to
+    # avoid build failures when system nvcc differs (e.g. system 13.x + torch cu128).
+    is_cuda = (torch.cuda.is_available() or os.getenv('FORCE_CUDA', '0') == '1') \
+              and (os.getenv('FORCE_CUDA', '0') == '1' or _nvcc_major_matches_torch())
+    if torch.cuda.is_available() and not is_cuda:
+        logging.warning(
+            "GPU is available but nvcc major version does not match torch's CUDA version. "
+            "Installing kaolin with CPU-only extensions. "
+            "Set FORCE_CUDA=1 to override."
+        )
 
     if is_cuda:
         define_macros += [("WITH_CUDA", None), ("THRUST_IGNORE_CUB_VERSION_CHECK", None)]
@@ -193,7 +215,7 @@ def get_extensions():
 def get_include_dirs():
     """Get include directories for CUDA builds."""
     include_dirs = []
-    if torch.cuda.is_available() or os.getenv('FORCE_CUDA', '0') == '1':
+    if (torch.cuda.is_available() or os.getenv('FORCE_CUDA', '0') == '1') and CUDA_HOME is not None:
         _, major, _ = get_cuda_bare_metal_version(CUDA_HOME)
         if "CUB_HOME" in os.environ:
             logging.warning(f"Including CUB_HOME: {os.environ['CUB_HOME']}")
