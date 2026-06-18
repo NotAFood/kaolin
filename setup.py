@@ -18,7 +18,7 @@ import subprocess  # Added import
 
 # Define version constraints
 TORCH_MIN_VER = '2.3.0'
-TORCH_MAX_VER = '2.10.0'  # Updated to support newer PyTorch versions
+TORCH_MAX_VER = '3.0.0'  # No upper bound in practice; bumped to support torch 2.12+
 IGNORE_TORCH_VER = os.getenv('IGNORE_TORCH_VER') is not None
 
 # Module required before installation
