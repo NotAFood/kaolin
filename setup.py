@@ -9,7 +9,7 @@
 import os
 from setuptools import setup, find_packages
 import importlib
-from pkg_resources import parse_version
+from packaging.version import Version as parse_version
 import warnings
 import logging
 import glob
